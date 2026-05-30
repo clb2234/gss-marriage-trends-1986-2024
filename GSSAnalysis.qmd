@@ -1,0 +1,508 @@
+---
+title: ""
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 12pt
+    mainfont: "Times New Roman"
+    pdf-engine: xelatex
+execute:
+  echo: false
+---
+\begin{titlepage}
+\centering
+
+\vspace*{1.0in}
+
+{\Large\bfseries Marital Status Change in the United States: Evidence From the 1986 and 2024 General Social Survey\par}
+
+\vspace{1.0in}
+
+{\large Carey Byron\par}
+
+\vspace{0.2in}
+
+{\large Columbia University\par}
+
+\vspace{0.2in}
+
+{\large UN2102: Applied Statistical Computing\par}
+
+\vspace{0.2in}
+
+{\large Professor Benjamin Goodrich\par}
+
+\vspace{0.2in}
+
+{\large May 29, 2026\par}
+
+\end{titlepage}
+
+\newpage
+
+\begin{center}
+\textbf{Abstract}
+\end{center}
+
+This project examines changes in marital status in the United States using data from the General Social Survey in 1986 and 2024. The two datasets, GSS1986.dta and GSS2024.dta, were combined into a single dataset so that marital status distributions could be compared across time. Respondents were grouped into five marital status categories: married, widowed, divorced, separated, and never married. The analysis first summarizes the counts and proportions of each marital status category in 1986 and 2024, then compares how these proportions vary by region, including the Northeast, Midwest, South, and West. The results show a clear decline in the proportion of never-married respondents increased from 18.1% to 33.6%. Regional visualizations show that this shift appears across all four regions, although the size of the change differs by region. Finally, the project uses a simple linear projection based on the observed 1986-2024 change to estimate marital status proportions in 2044. The projection suggests that if past trends continue, never-married respondents may become on only two time points, it should be interpreted as an illustrative trend rather than a precise forecast. Overall, the analysis suggests that marriage became less common among GSS respoondents between 1986 and 2024, while never-married status became increasingly common. 
+
+\newpage
+
+## Datasets and Variables
+
+This project uses data from the General Social Survey (GSS) for 1986 and 2024. The two survey files, `GSS1986.dta` and `GSS2024.dta`, were imported into R and combined into a single dataset so that marital status could be compared across the two time points. Each observation was identified by survey year, which allowed the analysis to examine changes in marital status distribution between 1986 and 2024.
+
+The main variable used in the analysis is `marital`, which records each respondent’s marital status. Respondents were grouped into five categories: married, widowed, divorced, separated, and never married. Responses such as missing values, “no answer,” and “skipped on web” were excluded so that the proportions reflected only valid marital-status responses.
+
+The analysis also uses the variable `region`, which identifies the respondent’s region of the United States. Region was used to compare whether changes in marital status were similar across the Northeast, Midwest, South, and West. For the overall comparison, counts and proportions were calculated within each survey year. For the regional comparison, counts and proportions were calculated within each combination of year and region. This makes it possible to compare both the overall national pattern and regional differences in marital status across time.
+
+
+
+```{r, message=FALSE, warning=FALSE}
+library(haven)
+library(dplyr)
+```
+
+```{r}
+#file.path: creates a file path in a safe way
+#read_stata: reads a Stata data file into R
+#as_factor: converts the labelled numbers in GSS data into readable factor labels
+GSS_2024 <- as_factor(read_stata(file.path("2024", "GSS2024.dta")))
+```
+
+```{r}
+GSS_1986 <- as_factor(read_stata("GSS1986.dta"))
+GSS_combined <- bind_rows(
+  "1986" = GSS_1986,
+  "2024" = GSS_2024
+)
+```
+
+```{r}
+library(haven)
+library(dplyr)
+
+marital_summary <- GSS_combined |>
+  filter(!is.na(marital),
+          marital != "no answer",
+          marital != "skipped on web") |>
+  count(year, marital, name = "count") |>
+  group_by(year) |>
+  mutate(prop = count / sum(count)) |>
+  ungroup()
+```
+
+
+\vspace{0.5in}
+
+```{r, results='asis'}
+library(dplyr)
+
+table_data <- marital_summary |>
+  mutate(
+    prop = sprintf("%.3f", prop),
+    marital = as.character(marital),
+    year = as.character(year)
+  )
+cat("\\noindent\\textbf{Table 1}\\par\n")
+cat("\\noindent\\textit{Marital Status Counts and Proportions in 1986 and 2024}\\par\\smallskip\n")
+
+cat("\\noindent\\begin{tabular*}{\\textwidth}{@{\\extracolsep{\\fill}}llrr}\n")
+cat("\\hline\n")
+cat("Year & Marital Status & Count & Proportion \\\\\n")
+cat("\\hline\n")
+
+for (i in seq_len(nrow(table_data))) {
+  cat(
+    table_data$year[i], " & ",
+    as.character(table_data$marital[i]), " & ",
+    table_data$count[i], " & ",
+    table_data$prop[i], " \\\\\n",
+    sep = ""
+  )
+}
+
+cat("\\hline\n")
+cat("\\end{tabular*}\n")
+```
+
+\newpage
+
+**Figure 1**
+
+*Marital Status Comparison: 1986 vs. 2024*
+
+```{r, fig.width=8, fig.height=5, out.width="100%"}
+library(ggplot2)
+library(scales)
+
+ggplot(marital_summary, aes(x = marital, y = prop, fill = year)) +
+  geom_col(position = position_dodge(width = 0.9), width = 0.65) +
+  geom_text(
+    aes(label = percent(prop, accuracy = 0.1)),
+    position = position_dodge(width = 0.9),
+    vjust = -0.4,
+    size = 3
+  ) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1),
+    limits = c(0, 0.60)
+  ) +
+  labs(
+    # title = "Marital Status Comparison: 1986 vs. 2024",
+    x = "Marital Status",
+    y = "Percentage",
+    fill = "Year"
+  ) +
+  theme_minimal(base_family = "serif") +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1, size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom"
+  )
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+marital_region_summary <- GSS_combined |>
+  filter(!is.na(region),
+        !is.na(marital),
+        marital != "no answer",
+        marital != "skipped on web") |>
+  count(year, region, marital, name = "count") |>
+  group_by(year, region) |>
+  mutate(prop = count / sum(count)) |>
+  ungroup()
+```
+
+```{r, fig.width=7, fig.height=4, out.width="100%"}
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+```
+
+
+## Analysis of Figure 1
+
+Figure 1 show a clear change in marital status distribution between 1986 and 2024. In 1986, the majority of respondents were married, with married individuals making up 56.2% of the sample. By 2024, this proportion had declined to 41.8%, a decrease of 14.4 percentage points. This suggests that marriage became less common among GSS respondents over this period.
+
+At the same time, the proportion of respondents who had never married increased substantially. In 1986, never-married respondents made up 18.1% of the sample, but by 2024 this rose to 33.6%, an increase of 15.5 percentage points. This was the largest increase among all marital status categories, suggesting a major shift toward delayed marriage or remaining unmarried.
+
+Other categories changed more modestly. The proportion of divorced respondents increased from 10.1% in 1986 to 14.6% in 2024, showing a moderate rise of 4.5 percentage points. In contrast, the proportion of widowed respondents decreased from 11.6% to 6.8%, and the proportion of separated respondents decreased slightly from 4.1% to 3.3%.
+
+Overall, these figures indicate that the marital status distribution shifted away from marriage between 1986 and 2024. The most important pattern is the decline in married respondents and the large increase in never-married respondents. This suggests that marriage was less dominant in the 2024 sample than it was in 1986, while never-married status became much more common.
+
+
+
+**Figure 2**
+
+*Marital Status Comparison by Region and Year: 1986 vs. 2024*
+
+\vspace{0.5in}
+```{r, fig.width=8.5, fig.height=9, out.width="100%"}
+marital_region_summary |>
+    # filter(region %in% c("northeast", "midwest", "south", "west")) |>
+    ggplot(aes(x = marital, y = prop, fill = year)) + 
+    geom_col(position = position_dodge(width = 0.9), 
+    width = 0.65) +
+  geom_text(
+    aes(label = percent(prop, accuracy = 0.1)),
+    position = position_dodge(width = 0.9),
+    vjust = -0.3, #0.4
+    size = 1.5 #3 
+  ) + 
+  #facet_wrap(~ region, ncol = 1, axes = "all_x", axis.labels = "all_x") +
+  facet_wrap(~ region, ncol = 2, axes = "all_x", axis.labels = "all_x") +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1),
+    limits = c(0, 0.75)
+  ) +
+  labs(
+    x = "Marital Status",
+    y = "Percentage",
+    fill = "Year"
+  ) + 
+  theme_minimal(base_family = "serif") +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1, size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.position = "bottom",
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 11),
+    panel.spacing.y = unit(0.6, "in"),
+    legend.box.margin = margin(t = 25, r = 0, b = 0, l = 0)
+  )
+```
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+
+marital_region_summary <- GSS_combined |>
+  filter(!is.na(region),
+        !is.na(marital),
+        marital != "no answer",
+        marital != "skipped on web") |>
+  count(year, region, marital, name = "count") |>
+  group_by(year, region) |>
+  mutate(prop = count / sum(count)) |>
+  ungroup()
+
+marital_projection <- marital_region_summary |>
+  select(year, region, marital, prop) |>
+  pivot_wider(
+    names_from = year,
+    values_from = prop,
+    names_prefix = "prop_"
+  ) |>
+  mutate(
+    yearly_change = (prop_2024 - prop_1986) / 38,
+    projected_raw = prop_2024 + yearly_change * 20
+  ) |>
+  group_by(region) |>
+  mutate(
+    projected_prop = projected_raw / sum(projected_raw)
+  ) |>
+  ungroup()
+
+marital_projection_donut <- marital_projection |>
+  mutate(
+    label = if_else(
+      projected_prop >= 0.05,
+      percent(projected_prop, accuracy = 0.1),
+      ""
+    )
+  )
+```  
+
+\newpage
+
+## Analysis of Figure 2: Regional Changes from 1986 to 2024
+
+The regional graphs show that the shift away from marriage occurred across all four regions between 1986 and 2024. In every region, the proportion of married respondents decreased, while the proportion of never-married respondents increased. This suggests that the overall decline in marriage was not limited to one part of the United States, but appeared across the Northeast, Midwest, South, and West.
+
+The Midwest and West had the largest declines in the married category. In the Midwest, the proportion of married respondents decreased from 58.4% in 1986 to 40.3% in 2024. In the West, it decreased from 59.4% to 46.5%. The South also showed a large decline, from 55.4% to 40.1%, while the Northeast declined from 51.5% to 41.3%. Although marriage remained a major marital-status category in 2024, it was less dominant in every region than it had been in 1986.
+
+At the same time, the never-married category increased substantially in all regions. The Midwest increased from 17.1% in 1986 to 34.1% in 2024, and the South increased from 17.5% to 34.6%. The West increased from 17.4% to 32.9%, while the Northeast increased from 21.1% to 31.3%. This pattern suggests a broad regional shift toward delayed marriage, remaining unmarried, or other alternatives to marriage.
+
+Other marital-status categories changed more modestly. The divorced category increased in every region, especially in the Northeast, where it rose from 8.9% to 15.2%, and in the South, where it rose from 10.3% to 14.4%. The widowed category decreased across all regions, and the separated category remained relatively small in both years. Overall, the regional graphs support the main finding that marital status became less centered around marriage between 1986 and 2024, with never-married status becoming much more common across the United States.
+
+
+\vspace{0.5in}
+
+**Figure 3**
+
+*Projected Marital Status Proportions by Region in 2044*
+
+\vspace{-0.8in}
+
+```{r, fig.width=8, fig.height=4.5, out.width="100%"}
+center_labels <- marital_projection_donut|>
+  distinct(region) |>
+  mutate(
+    x = 0, 
+    y = 0,
+    region_label = tools::toTitleCase(as.character(region))
+  )
+
+ggplot(marital_projection_donut,
+       aes(x = 2, y = projected_prop, fill = marital)) +
+  geom_col(color = "white", width = 1) +
+  coord_polar(theta = "y", clip = "off") +
+  xlim(0, 2.5) +
+  facet_wrap(~ region, nrow = 1) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 2.5
+  ) +
+  geom_text(
+    data = center_labels,
+    aes(x = x, y = y, label = region_label),
+    inherit.aes = FALSE,
+    family = "serif",
+    fontface = "bold",
+    size = 4,
+    color = "black",
+    hjust = 0.5,
+    vjust = 0.5
+  ) +
+  
+  scale_fill_manual(
+    values = c(
+      "married" = "#2F4B7C",
+      "widowed" = "#6B6B6B",
+      "divorced" = "#D36F27",
+      "separated" = "#6E6BB3",
+      "never married" = "#4F9D75"
+    )
+  ) +
+  labs(
+    title = "",
+    fill = "Marital Status"
+  ) +
+  guides(
+    fill = guide_legend(nrow = 1, ncol = 5, byrow = TRUE)
+  ) +
+  theme_void(base_family = "serif") +
+  theme(
+    plot.title = element_text(
+      hjust = 0.5,
+      face = "bold",
+      size = 16,
+      margin = margin(b = 12)
+    ),
+    strip.text = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_text(size = 11, face = "bold"),
+    legend.text = element_text(size = 10),
+    plot.margin = margin(t = 10, r = 20, b = 10, l = 20)
+  )
+```
+
+```{r, fig.width=9, fig.height=4.5, out.width="100%"}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+
+marital_year_summary <- GSS_combined |>
+  filter(!is.na(marital),
+      marital != "no answer",
+      marital != "skipped on web") |>
+  count(year, marital, name = "count") |>
+  group_by(year) |>
+  mutate(prop = count / sum(count)) |>
+  ungroup()
+```
+
+```{r}
+marital_projection_year <- marital_year_summary |>
+  select(year, marital, prop) |>
+  pivot_wider(
+    names_from = year,
+    values_from = prop,
+    names_prefix = "prop_"
+  ) |>
+  mutate(
+    yearly_change = (prop_2024 - prop_1986) / 38,
+    prop_2044 = prop_2024 + yearly_change * 20
+  ) |>
+  select(marital, prop_2044) |>
+  rename(prop = prop_2044) |>
+  mutate(year = "2044") 
+```
+
+```{r}
+marital_donut_year <- marital_year_summary |>
+  select(year, marital, prop) |>
+  mutate(year = as.character(year)) |>
+  bind_rows(marital_projection_year) |>
+  mutate(
+    label = if_else(
+      prop >= 0.05,
+      percent(prop, accuracy = 0.1),
+      ""
+    )
+  )
+center_labels_year <- marital_donut_year |>
+  distinct(year) |>
+  mutate(
+    x = 0, 
+    y = 0,
+    year_label = as.character(year)
+  )
+```
+
+\vspace{0.2in}
+
+**Figure 4**
+
+*Marital Status Proportions: 1986, 2024, and Projected 2044*
+
+\vspace{-0.6in}
+```{r}
+ggplot(marital_donut_year,
+       aes(x = 2, y = prop, fill = marital)) +
+  geom_col(color = "white", width = 1) +
+  coord_polar(theta = "y", clip = "off") + 
+  xlim(0, 2.5) + 
+  facet_wrap(~ year, nrow = 1) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 2.5
+  ) +
+  geom_text(
+    data = center_labels_year,
+    aes(x = x, y = y, label = year_label),
+    inherit.aes = FALSE,
+    family = "serif",
+    fontface = "bold",
+    size = 4,
+    color = "black",
+    hjust = 0.5,
+    vjust = 0.5
+  ) +
+  scale_fill_manual(
+    values = c(
+      "married" = "#2F4B7C",
+      "widowed" = "#6B6B6B",
+      "divorced" = "#D36F27",
+      "separated" = "#6E6BB3",
+      "never married" = "#4F9D75"
+    )
+  ) +
+  labs(
+    title = "",
+    fill = "Marital Status"
+  ) + 
+  guides(
+    fill = guide_legend(nrow = 1, byrow = TRUE)
+  ) +
+  theme_void(base_family = "serif") +
+  theme(
+    plot.title = element_text(
+      hjust = 0.5,
+      face = "bold",
+      size = 13,
+      margin = margin(b = 8)
+    ),
+    strip.text = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_text(size = 9, face = "bold"),
+    legend.text = element_text(size = 8),
+    legend.key.size = unit(0.35, "cm"),
+    plot.margin = margin(t = 5, r = 5, b = 5, l = 5)
+  )
+```
+
+# 20-Year Projection
+
+Figures 3 and 4 show a simple 20-year projection of marital status patterns based on the observed changes between 1986 and 2024. Figure 4 presents the overall projected distribution for 2044, while Figure 3 shows how the projected 2044 distribution varies by region. Because the projection is based on only two observed years, it should be interpreted as an illustrative extension of the trend rather than a precise forecast.
+
+Figure 4 suggests that if the 1986-to-2024 pattern continues, the overall share of married respondents would continue to decline, from 41.8% in 2024 to 34.2% in 2044. In contrast, the share of never-married respondents would increase from 33.6% in 2024 to 41.8% in 2044. Under this projection, never-married respondents would become the largest marital status category by 2044, replacing married respondents as the most common category.
+
+Figure 3 shows that this projected shift appears across all four regions. In every region, the projected share of never-married respondents is high: 36.7% in the Northeast, 43.1% in the Midwest, 43.6% in the South, and 41.1% in the West. The Midwest and South are projected to have the largest never-married shares, while the Northeast has the lowest projected never-married share among the four regions. At the same time, the projected share of married respondents remains below earlier levels in every region, with projected values of 35.9% in the Northeast, 30.8% in the Midwest, 32.1% in the South, and 39.7% in the West.
+
+The projections also suggest that divorced respondents may remain a moderate share of the population by 2044. Figure 4 shows that divorced respondents are projected to make up 17.0% of respondents overall. Regionally, Figure 3 shows projected divorced shares of 18.5% in the Northeast, 17.8% in the Midwest, 16.6% in the South, and 15.6% in the West. Widowed and separated respondents are projected to remain smaller categories across both the overall and regional projections.
+
+Overall, Figures 3 and 4 suggest that marital status may continue shifting away from marriage and toward never-married status over the next 20 years. However, because the projection relies only on the change between 1986 and 2024, it should not be read as a definitive prediction of 2044. Instead, it provides a simple visualization of what marital status distributions could look like if the same linear trend continues.
+
+
+# Conclusion
+
+This analysis examines changes in marital status in the United States using data from the General Social Survey for 1986 and 2024. The two survey years were combined into a single dataset, with each observation identified by year, allowing marital status distributions to be compared across time. Respondents were grouped by marital status category, including married, widowed, divorced, separated, and never married, and proportions were calculated within each survey year. The results show a substantial decline in the proportion of married respondents, from 56.2% in 1986 to 41.8% in 2024. In contrast, the proportion of respondents who had never married increased from 18.1% to 33.6%, while the proportion of divorced respondents also rose modestly. Additional visualizations by region show that this shift appears across different parts of the United States, though the size of the change varies by region. A simple linear projection was also used to estimate marital status proportions in 2044 based on the observed change between 1986 and 2024. Because this projection relies on only two time points, it should be interpreted as an illustrative extension of the observed trend rather than a precise forecast. Overall, the analysis suggests that marriage became less common among GSS respondents between 1986 and 2024, while never-married status became increasingly common. 
